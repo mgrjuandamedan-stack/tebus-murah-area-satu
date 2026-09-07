@@ -38,10 +38,10 @@
             </div>
         </div>
         <div class="flex items-center space-x-4">
-            <div id="status-indicator" class="flex items-center space-x-2 text-sm bg-indigo-700 px-3 py-1 rounded-full border border-indigo-500">
+            <div id="status-indicator" class="flex items-center space-x-2 text-sm bg-indigo-700 px-3 py-1 rounded-full border border-indigo-500 transition-all duration-300">
                 <span class="relative flex h-3 w-3">
                   <span id="status-ping" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-                  <span id="status-dot" class="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
+                  <span id="status-dot" class="relative inline-flex rounded-full h-3 w-3 bg-yellow-500 transition-colors duration-300"></span>
                 </span>
                 <span id="status-text" class="font-medium">Mock Data</span>
             </div>
@@ -147,7 +147,7 @@
 <!-- Modal Config -->
 <div id="config-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex justify-center items-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col">
-        <div class="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+        <div class="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center bg-slate-50">
             <h2 class="font-bold text-slate-700 flex items-center gap-2"><i class="fa-solid fa-link text-indigo-500"></i> Hubungkan ke Spreadsheet</h2>
             <button onclick="toggleConfigModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
         </div>
@@ -194,6 +194,7 @@
     let isMockMode = !API_URL;
     let autoRefreshInterval = null;
     let globalData = [];
+    let isFirstLoad = true; // Tambahkan flag untuk melacak muatan pertama
     
     // Daftar 7 Store wajib sesuai permintaan (Hanya untuk memvalidasi/memastikan kelengkapannya jika dibutuhkan)
     const REQUIRED_STORES = ["Juanda Medan", "CPM Medan", "S.parman Medan", "LP Medan", "IDP medan", "Siantar City", "Aceh Lampriet"];
@@ -252,24 +253,24 @@
 
         if (isMock) {
             text.innerText = "Data Simulasi";
-            dot.className = "relative inline-flex rounded-full h-3 w-3 bg-amber-500";
+            dot.className = "relative inline-flex rounded-full h-3 w-3 bg-amber-500 transition-colors duration-300";
             ping.className = "hidden";
-            container.className = "flex items-center space-x-2 text-sm bg-amber-100 text-amber-800 px-3 py-1 rounded-full border border-amber-300";
+            container.className = "flex items-center space-x-2 text-sm bg-amber-100 text-amber-800 px-3 py-1 rounded-full border border-amber-300 transition-all duration-300";
         } else if (status === 'loading') {
-            text.innerText = "Memuat data...";
-            dot.className = "relative inline-flex rounded-full h-3 w-3 bg-blue-500";
+            text.innerText = isFirstLoad ? "Memuat data..." : "Menyegarkan...";
+            dot.className = "relative inline-flex rounded-full h-3 w-3 bg-blue-500 transition-colors duration-300";
             ping.className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75";
-            container.className = "flex items-center space-x-2 text-sm bg-blue-700 px-3 py-1 rounded-full border border-blue-500 text-white";
+            container.className = "flex items-center space-x-2 text-sm bg-blue-700 px-3 py-1 rounded-full border border-blue-500 text-white transition-all duration-300";
         } else if (status === 'live') {
             text.innerText = "Live Connected";
-            dot.className = "relative inline-flex rounded-full h-3 w-3 bg-emerald-400";
+            dot.className = "relative inline-flex rounded-full h-3 w-3 bg-emerald-400 transition-colors duration-300";
             ping.className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75";
-            container.className = "flex items-center space-x-2 text-sm bg-indigo-700 px-3 py-1 rounded-full border border-indigo-500 text-white";
+            container.className = "flex items-center space-x-2 text-sm bg-indigo-700 px-3 py-1 rounded-full border border-indigo-500 text-white transition-all duration-300";
         } else {
             text.innerText = "Koneksi Gagal";
-            dot.className = "relative inline-flex rounded-full h-3 w-3 bg-red-500";
+            dot.className = "relative inline-flex rounded-full h-3 w-3 bg-red-500 transition-colors duration-300";
             ping.className = "hidden";
-            container.className = "flex items-center space-x-2 text-sm bg-red-100 text-red-800 px-3 py-1 rounded-full border border-red-300";
+            container.className = "flex items-center space-x-2 text-sm bg-red-100 text-red-800 px-3 py-1 rounded-full border border-red-300 transition-all duration-300";
         }
     }
 
@@ -300,7 +301,7 @@
     }
 
     // Mengambil data dari API
-    async function fetchData() {
+    async function fetchData(silentRefresh = false) {
         if (isMockMode) {
             updateStatusUI('live', true);
             return generateMockData();
@@ -311,7 +312,15 @@
             const response = await fetch(API_URL);
             if (!response.ok) throw new Error("Gagal menghubungi server");
             
-            const result = await response.json();
+            let result;
+            try {
+                // Mencoba mengubah response menjadi JSON
+                result = await response.json();
+            } catch (parseError) {
+                // Jika error "Unexpected token <", berarti Google mengembalikan halaman HTML login
+                throw new Error("URL Spreadsheet salah atau Akses tidak publik. Pastikan URL berakhiran '/exec' dan Akses Deploy Apps Script diatur ke 'Siapa saja' (Anyone).");
+            }
+
             if (result.status === "error") throw new Error(result.message);
             
             updateStatusUI('live', false);
@@ -326,8 +335,11 @@
         } catch (error) {
             console.error("Error fetching data:", error);
             updateStatusUI('error', false);
-            showAlert("Koneksi Gagal", "Gagal mengambil data dari Spreadsheet. Pastikan URL Apps Script benar dan sheet bernama 'DataPenjualan' memiliki kolom yang sesuai.\n\nDetail: " + error.message);
-            return [];
+            // Jangan tampilkan alert error jika ini adalah auto-refresh (silent refresh) untuk menghindari gangguan konstan jika koneksi terputus sesaat
+            if (!silentRefresh) {
+                showAlert("Koneksi Gagal", "Gagal mengambil data dari Spreadsheet. Pastikan URL Apps Script benar dan sheet bernama 'DataPenjualan' memiliki kolom yang sesuai.\n\nDetail: " + error.message);
+            }
+            return globalData; // Kembalikan data lama jika gagal mengambil yang baru saat silent refresh
         }
     }
 
@@ -458,24 +470,26 @@
 
     // Fungsi Utama Inisialisasi
     async function initDashboard() {
-        // Shimmer loading style
-        document.getElementById('tot-area1-val').innerHTML = '<div class="h-8 w-32 bg-slate-200 rounded shimmer mx-auto"></div>';
-        document.getElementById('store-container').innerHTML = Array(5).fill('<div class="h-14 bg-slate-100 rounded-lg mb-3 shimmer"></div>').join('');
-        document.getElementById('dept-container').innerHTML = Array(5).fill('<div class="h-14 bg-slate-100 rounded-lg mb-3 shimmer"></div>').join('');
-        document.getElementById('detail-container').innerHTML = Array(7).fill('<tr><td colspan="6" class="p-2"><div class="h-8 bg-slate-100 rounded shimmer"></div></td></tr>').join('');
+        // Shimmer loading style HANYA saat muatan pertama (bukan saat auto-refresh)
+        if (isFirstLoad) {
+            document.getElementById('tot-area1-val').innerHTML = '<div class="h-8 w-32 bg-slate-200 rounded shimmer mx-auto"></div>';
+            document.getElementById('store-container').innerHTML = Array(5).fill('<div class="h-14 bg-slate-100 rounded-lg mb-3 shimmer"></div>').join('');
+            document.getElementById('dept-container').innerHTML = Array(5).fill('<div class="h-14 bg-slate-100 rounded-lg mb-3 shimmer"></div>').join('');
+            document.getElementById('detail-container').innerHTML = Array(7).fill('<tr><td colspan="6" class="p-2"><div class="h-8 bg-slate-100 rounded shimmer"></div></td></tr>').join('');
+        }
 
-        globalData = await fetchData();
+        globalData = await fetchData(!isFirstLoad);
         renderDashboard(globalData);
+        isFirstLoad = false; // Tandai bahwa muatan pertama sudah selesai
 
-        // Setup Auto-refresh setiap 30 detik jika tidak mode mock
+        // Setup Auto-refresh setiap 30 detik
         if (autoRefreshInterval) clearInterval(autoRefreshInterval);
         
-        if (!isMockMode) {
-            autoRefreshInterval = setInterval(async () => {
-                globalData = await fetchData();
-                renderDashboard(globalData);
-            }, 30000); // 30 detik
-        }
+        // Selalu jalankan auto refresh, bahkan untuk mock data (agar terlihat seperti live system yang memperbarui waktu)
+        autoRefreshInterval = setInterval(async () => {
+            globalData = await fetchData(true); // true = silent refresh
+            renderDashboard(globalData);
+        }, 30000); // Refresh setiap 30 detik (30000 milidetik)
     }
 
     // Jalankan saat dokumen dimuat
